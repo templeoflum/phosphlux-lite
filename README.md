@@ -16,7 +16,7 @@ A simple, unified video synthesizer with a fixed 7-stage signal chain. Captures 
 ## Signal Chain
 
 ```
-[INPUT] → [GEOMETRY] → [AMPLITUDE] → [COLORIZE] → [MIXER] → [FEEDBACK] → [OUTPUT]
+[INPUT] → [GEOMETRY] → [AMPLITUDE] → [COLORIZE] → [FEEDBACK] → [OUTPUT]
 ```
 
 ### Stage 1: Input Matrix
@@ -48,21 +48,14 @@ Map luminance to color:
 - **Monochrome**: Grayscale output
 - **Controls**: Hue offset, saturation adjustment
 
-### Stage 5: Mixer
-Blend current frame with feedback:
-- **Blend Modes**: Mix, Add, Multiply, Screen, Overlay, Difference
+### Stage 5: Feedback
+Temporal effects using previous frame with mixing controls:
+- **Mix**: Feedback amount, blend modes (Mix, Add, Multiply, Screen, Overlay, Difference)
 - **Luma Key**: Key based on luminance with threshold/softness
-- **Controls**: Feedback mix amount, layer opacity
+- **Transform**: Zoom, rotation, X/Y offset
+- **Color**: Hue shift, decay, saturation
 
-### Stage 6: Feedback
-Temporal effects using previous frame:
-- **Zoom**: Expand/contract feedback
-- **Rotation**: Rotate feedback each frame
-- **Hue Shift**: Color rotation over time
-- **Decay**: Brightness falloff
-- **Offset**: X/Y drift
-
-### Stage 7: Output
+### Stage 6: Output
 Stackable display effects (applied in order: VHS → Cable → CRT):
 - **VHS**: Tracking errors, tape wobble, chroma shift, noise
 - **Cable**: Bandwidth limiting, RF ghosting, noise
@@ -109,7 +102,7 @@ cargo run --release
 ## Controls
 
 - **Top Panel**: Preset selection, Randomize button, BPM controls, Settings (gear icon)
-- **Right Panel**: Stage tabs (INPUT, GEOM, AMP, COLOR, MIX, FB, OUT)
+- **Right Panel**: Stage tabs (INPUT, GEOM, AMP, COLOR, FB, OUT)
 - **Center**: Video preview with PVM bezel overlay
 - **Settings Window**: Bezel toggle, zoom, position, and alignment adjustments
 

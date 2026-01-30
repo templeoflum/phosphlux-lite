@@ -1,5 +1,16 @@
 # Phosphlux Lite Development Log
 
+## v0.2.1 - UI Polish (2026-01-30)
+
+### Changes
+
+- Combined Mixer and Feedback panels into single FB tab
+- Organized FB controls into sections: Mix, Luma Key, Transform, Color
+- Reduced stage tabs from 7 to 6: INPUT, GEOM, AMP, COLOR, FB, OUT
+- Fixed feedback mix fade-in with power curve (smoother transition from 0)
+
+---
+
 ## v0.2.0 - UI Overhaul & Automation (2026-01-30)
 
 ### New Features
@@ -40,6 +51,7 @@
 - Bezel PNG loaded via `include_bytes!` and stored as `TextureHandle`
 - VHS/cable shader functions now take `use_feedback` parameter
 - Feedback active check: `fb_enabled > 0.5 && mixer_feedback_mix > 0.01`
+- Power curve applied to feedback mix for smoother fade-in at low values
 
 ---
 
@@ -52,7 +64,7 @@ First release of Phosphlux Lite - a simplified, fixed-pipeline video synthesizer
 ### Architecture Decisions
 
 **Why a fixed pipeline?**
-- Predictable signal flow: INPUT → GEOMETRY → AMPLITUDE → COLORIZE → MIXER → FEEDBACK → OUTPUT
+- Predictable signal flow: INPUT → GEOMETRY → AMPLITUDE → COLORIZE → FEEDBACK → OUTPUT
 - Every stage has a clear purpose inspired by classic hardware
 - No routing decisions - just adjust parameters and explore
 - Single shader file (`lite.wgsl`) is easier to understand and modify
@@ -62,9 +74,8 @@ First release of Phosphlux Lite - a simplified, fixed-pipeline video synthesizer
 2. **Geometry**: Combines wobbulation + z-displacement + lissajous - the spatial transformations
 3. **Amplitude**: Wave shaping (fold, quantize, clip) - the signal processors
 4. **Colorize**: Luminance-to-color mapping - the colorizers
-5. **Mixer**: Feedback integration with blend modes - the compositing
-6. **Feedback**: Temporal recursion - the time domain
-7. **Output**: Display emulation - the final presentation
+5. **Feedback**: Temporal recursion with mixing and keying - the time domain
+6. **Output**: Display emulation - the final presentation
 
 ### Implementation Notes
 
@@ -115,10 +126,9 @@ The `lite.wgsl` shader is organized by stage:
 4. **Stage 2 - Geometry**: `stage_geometry()` with wobbulation, z-displacement
 5. **Stage 3 - Amplitude**: `fold()`, `quantize()`, `soft_clip()`, `solarize()`, `stage_amplitude()`
 6. **Stage 4 - Colorize**: `colorize_spectrum()`, `colorize_threshold()`, `stage_colorize()`
-7. **Stage 5 - Mixer**: Blend modes, luma key, `stage_mixer()`
-8. **Stage 6 - Feedback**: Transform sampling, `stage_feedback()`
-9. **Stage 7 - Output**: VHS/Cable/CRT effects with conditional feedback sampling
-10. **Fragment main**: Orchestrates all stages in order
+7. **Stage 5 - Feedback**: Blend modes, luma key, transform sampling via `stage_mixer()` and `stage_feedback()`
+8. **Stage 6 - Output**: VHS/Cable/CRT effects with conditional feedback sampling
+9. **Fragment main**: Orchestrates all stages in order
 
 ### Performance
 
@@ -130,6 +140,13 @@ The `lite.wgsl` shader is organized by stage:
 ---
 
 ## Development History
+
+### 2026-01-30: v0.2.1 Release
+
+- Combined Mixer and Feedback panels into single FB tab
+- Organized FB controls into sections: Mix, Luma Key, Transform, Color
+- Fixed feedback mix fade-in with power curve for smoother transitions
+- Reduced UI complexity from 7 tabs to 6
 
 ### 2026-01-30: v0.2.0 Release
 

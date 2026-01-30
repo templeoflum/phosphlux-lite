@@ -87,7 +87,6 @@ pub fn draw_ui(ctx: &egui::Context, app: &mut App) {
                     (SelectedStage::Geometry, "GEOM"),
                     (SelectedStage::Amplitude, "AMP"),
                     (SelectedStage::Colorize, "COLOR"),
-                    (SelectedStage::Mixer, "MIX"),
                     (SelectedStage::Feedback, "FB"),
                     (SelectedStage::Output, "OUT"),
                 ];
@@ -115,8 +114,8 @@ pub fn draw_ui(ctx: &egui::Context, app: &mut App) {
                     SelectedStage::Geometry => draw_geometry_stage(ui, &mut app.synth.geometry, &mut app.automation),
                     SelectedStage::Amplitude => draw_amplitude_stage(ui, &mut app.synth.amplitude, &mut app.automation),
                     SelectedStage::Colorize => draw_colorize_stage(ui, &mut app.synth.colorize, &mut app.automation),
-                    SelectedStage::Mixer => draw_mixer_stage(ui, &mut app.synth.mixer, &mut app.automation),
-                    SelectedStage::Feedback => draw_feedback_stage(ui, &mut app.synth.feedback, &mut app.automation),
+                    SelectedStage::Mixer => draw_feedback_stage(ui, &mut app.synth.feedback, &mut app.synth.mixer, &mut app.automation),
+                    SelectedStage::Feedback => draw_feedback_stage(ui, &mut app.synth.feedback, &mut app.synth.mixer, &mut app.automation),
                     SelectedStage::Output => draw_output_stage(ui, &mut app.synth.output, &mut app.automation),
                 };
 
@@ -480,35 +479,7 @@ fn draw_colorize_stage(ui: &mut Ui, color: &mut ColorizeStage, automation: &mut 
     modified
 }
 
-fn draw_mixer_stage(ui: &mut Ui, mixer: &mut MixerStage, automation: &mut AutomationState) -> bool {
-    let mut modified = false;
-
-    modified |= param_slider_with_lfo(ui, "FB Mix:", "mixer.feedback_mix", &mut mixer.feedback_mix, 0.0..=1.0, automation);
-
-    ui.label("Blend Mode:");
-    egui::ComboBox::from_id_salt("blend_mode")
-        .selected_text(format!("{:?}", mixer.blend_mode))
-        .show_ui(ui, |ui| {
-            for mode in [BlendMode::Mix, BlendMode::Add, BlendMode::Multiply, BlendMode::Screen, BlendMode::Overlay, BlendMode::Difference, BlendMode::LumaKeyA, BlendMode::LumaKeyB] {
-                if ui.selectable_label(mixer.blend_mode == mode, format!("{:?}", mode)).clicked() {
-                    mixer.blend_mode = mode;
-                    modified = true;
-                }
-            }
-        });
-
-    modified |= param_slider_with_lfo(ui, "Opacity:", "mixer.layer_opacity", &mut mixer.layer_opacity, 0.0..=1.0, automation);
-
-    ui.add_space(4.0);
-
-    modified |= param_slider_with_lfo(ui, "Key Thresh:", "mixer.key_threshold", &mut mixer.key_threshold, 0.0..=1.0, automation);
-    modified |= param_slider_with_lfo(ui, "Key Soft:", "mixer.key_softness", &mut mixer.key_softness, 0.0..=0.5, automation);
-    modified |= ui.checkbox(&mut mixer.key_invert, "Invert Key").changed();
-
-    modified
-}
-
-fn draw_feedback_stage(ui: &mut Ui, fb: &mut FeedbackStage, automation: &mut AutomationState) -> bool {
+fn draw_feedback_stage(ui: &mut Ui, fb: &mut FeedbackStage, mixer: &mut MixerStage, automation: &mut AutomationState) -> bool {
     let mut modified = false;
 
     modified |= ui.checkbox(&mut fb.enabled, "Enable Feedback").changed();
@@ -516,15 +487,46 @@ fn draw_feedback_stage(ui: &mut Ui, fb: &mut FeedbackStage, automation: &mut Aut
     if fb.enabled {
         ui.add_space(4.0);
 
-        modified |= param_slider_with_lfo(ui, "Zoom:", "feedback.zoom", &mut fb.zoom, 0.9..=1.1, automation);
-        modified |= param_slider_with_lfo(ui, "Rotation:", "feedback.rotation", &mut fb.rotation, -0.1..=0.1, automation);
-        modified |= param_slider_with_lfo(ui, "Hue Shift:", "feedback.hue_shift", &mut fb.hue_shift, 0.0..=0.1, automation);
-        modified |= param_slider_with_lfo(ui, "Decay:", "feedback.decay", &mut fb.decay, 0.8..=1.0, automation);
+        // Mix controls (from mixer stage)
+        modified |= param_slider_with_lfo(ui, "FB Mix:", "mixer.feedback_mix", &mut mixer.feedback_mix, 0.0..=1.0, automation);
+
+        ui.label("Blend Mode:");
+        egui::ComboBox::from_id_salt("blend_mode")
+            .selected_text(format!("{:?}", mixer.blend_mode))
+            .show_ui(ui, |ui| {
+                for mode in [BlendMode::Mix, BlendMode::Add, BlendMode::Multiply, BlendMode::Screen, BlendMode::Overlay, BlendMode::Difference, BlendMode::LumaKeyA, BlendMode::LumaKeyB] {
+                    if ui.selectable_label(mixer.blend_mode == mode, format!("{:?}", mode)).clicked() {
+                        mixer.blend_mode = mode;
+                        modified = true;
+                    }
+                }
+            });
+
+        modified |= param_slider_with_lfo(ui, "Opacity:", "mixer.layer_opacity", &mut mixer.layer_opacity, 0.0..=1.0, automation);
 
         ui.add_space(4.0);
+        ui.separator();
+        ui.label("Luma Key:");
 
+        modified |= param_slider_with_lfo(ui, "Threshold:", "mixer.key_threshold", &mut mixer.key_threshold, 0.0..=1.0, automation);
+        modified |= param_slider_with_lfo(ui, "Softness:", "mixer.key_softness", &mut mixer.key_softness, 0.0..=0.5, automation);
+        modified |= ui.checkbox(&mut mixer.key_invert, "Invert Key").changed();
+
+        ui.add_space(4.0);
+        ui.separator();
+        ui.label("Transform:");
+
+        modified |= param_slider_with_lfo(ui, "Zoom:", "feedback.zoom", &mut fb.zoom, 0.9..=1.1, automation);
+        modified |= param_slider_with_lfo(ui, "Rotation:", "feedback.rotation", &mut fb.rotation, -0.1..=0.1, automation);
         modified |= param_slider_with_lfo(ui, "Offset X:", "feedback.offset_x", &mut fb.offset_x, -0.1..=0.1, automation);
         modified |= param_slider_with_lfo(ui, "Offset Y:", "feedback.offset_y", &mut fb.offset_y, -0.1..=0.1, automation);
+
+        ui.add_space(4.0);
+        ui.separator();
+        ui.label("Color:");
+
+        modified |= param_slider_with_lfo(ui, "Hue Shift:", "feedback.hue_shift", &mut fb.hue_shift, 0.0..=0.1, automation);
+        modified |= param_slider_with_lfo(ui, "Decay:", "feedback.decay", &mut fb.decay, 0.8..=1.0, automation);
         modified |= param_slider_with_lfo(ui, "Saturation:", "feedback.saturation", &mut fb.saturation, 0.0..=2.0, automation);
     }
 

@@ -454,40 +454,56 @@ fn luma_key(color: vec3<f32>, threshold: f32, softness: f32) -> f32 {
 }
 
 fn stage_mixer(color: vec3<f32>, feedback: vec3<f32>) -> vec3<f32> {
-    let mix_amount = synth.mixer_feedback_mix;
+    let raw_mix = synth.mixer_feedback_mix;
 
-    if mix_amount < 0.001 {
+    if raw_mix < 0.001 {
         return color;
     }
 
-    var result: vec3<f32>;
+    // Apply power curve for smoother fade-in at low values
+    let mix_amount = raw_mix * raw_mix;
+
+    var blended: vec3<f32>;
     let mode = synth.mixer_blend_mode;
 
+    // First compute the blend result (what we'd see at 100% feedback)
     if mode == BLEND_MIX {
-        result = mix(color, feedback, mix_amount);
+        blended = feedback;
     } else if mode == BLEND_ADD {
-        result = mix(color, min(color + feedback, vec3<f32>(1.0)), mix_amount);
+        blended = min(color + feedback, vec3<f32>(1.0));
     } else if mode == BLEND_MULTIPLY {
-        result = mix(color, color * feedback, mix_amount);
+        blended = color * feedback;
     } else if mode == BLEND_SCREEN {
-        result = mix(color, blend_screen(color, feedback), mix_amount);
+        blended = blend_screen(color, feedback);
     } else if mode == BLEND_OVERLAY {
-        result = mix(color, blend_overlay(color, feedback), mix_amount);
+        blended = blend_overlay(color, feedback);
     } else if mode == BLEND_DIFFERENCE {
-        result = mix(color, abs(color - feedback), mix_amount);
+        blended = abs(color - feedback);
     } else if mode == BLEND_LUMA_KEY_A {
+        // Key based on current signal luminance
         var key = luma_key(color, synth.mixer_key_threshold, synth.mixer_key_softness);
         key = select(key, 1.0 - key, synth.mixer_key_invert > 0.5);
-        result = mix(color, mix(color, feedback, key), mix_amount);
+        // Where key is high, show feedback; where low, show color
+        blended = mix(color, feedback, key);
     } else if mode == BLEND_LUMA_KEY_B {
+        // Key based on feedback luminance
         var key = luma_key(feedback, synth.mixer_key_threshold, synth.mixer_key_softness);
         key = select(key, 1.0 - key, synth.mixer_key_invert > 0.5);
-        result = mix(color, mix(color, feedback, key), mix_amount);
+        // Where key is high, show feedback; where low, show color
+        blended = mix(color, feedback, key);
     } else {
-        result = mix(color, feedback, mix_amount);
+        blended = feedback;
     }
 
-    return result * synth.mixer_layer_opacity;
+    // Mix between original color and blended result based on mix amount
+    var result = mix(color, blended, mix_amount);
+
+    // Layer opacity acts as an overall output gain (usually leave at 1.0)
+    if synth.mixer_layer_opacity < 0.999 {
+        result = result * synth.mixer_layer_opacity;
+    }
+
+    return result;
 }
 
 // ============================================
