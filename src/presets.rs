@@ -69,7 +69,7 @@ pub fn builtin_presets() -> Vec<Preset> {
                     ..Default::default()
                 },
                 output: OutputStage {
-                    mode: OutputMode::CRT,
+                    crt_enabled: true,
                     scanlines: 0.1,
                     bloom: 0.3,
                     ..Default::default()
@@ -116,7 +116,7 @@ pub fn builtin_presets() -> Vec<Preset> {
                     ..Default::default()
                 },
                 output: OutputStage {
-                    mode: OutputMode::CRT,
+                    crt_enabled: true,
                     ..Default::default()
                 },
             },
@@ -159,7 +159,7 @@ pub fn builtin_presets() -> Vec<Preset> {
                     ..Default::default()
                 },
                 output: OutputStage {
-                    mode: OutputMode::CRT,
+                    crt_enabled: true,
                     scanlines: 0.2,
                     ..Default::default()
                 },
@@ -205,9 +205,9 @@ pub fn builtin_presets() -> Vec<Preset> {
                     ..Default::default()
                 },
                 output: OutputStage {
-                    mode: OutputMode::VHS,
+                    vhs_enabled: true, crt_enabled: true,
                     scanlines: 0.05,
-                    noise: 0.08,
+                    vhs_noise: 0.08,
                     tracking: 0.3,
                     chroma_shift: 0.008,
                     tape_wobble: 0.4,
@@ -248,7 +248,7 @@ pub fn builtin_presets() -> Vec<Preset> {
                     ..Default::default()
                 },
                 output: OutputStage {
-                    mode: OutputMode::CRT,
+                    crt_enabled: true,
                     scanlines: 0.15,
                     bloom: 0.4,
                     ..Default::default()
@@ -296,7 +296,7 @@ pub fn builtin_presets() -> Vec<Preset> {
                     ..Default::default()
                 },
                 output: OutputStage {
-                    mode: OutputMode::CRT,
+                    crt_enabled: true,
                     scanlines: 0.08,
                     bloom: 0.5,
                     vignette: 0.5,

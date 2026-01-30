@@ -65,21 +65,6 @@ impl Default for BlendMode {
     }
 }
 
-/// Output emulation mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(u32)]
-pub enum OutputMode {
-    Clean = 0,
-    CRT = 1,
-    VHS = 2,
-    Cable = 3,
-}
-
-impl Default for OutputMode {
-    fn default() -> Self {
-        Self::CRT
-    }
-}
 
 /// Stage 1: Input Matrix
 /// Mix and combine signal sources
@@ -244,38 +229,48 @@ impl Default for FeedbackStage {
 }
 
 /// Stage 7: Output
-/// Display emulation - CRT, VHS, cable degradation
+/// Display emulation - stacked effects: VHS -> Cable -> CRT
+/// Each can be toggled independently, applied in fixed order
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct OutputStage {
-    pub mode: OutputMode,
+    // Effect toggles (applied in order: VHS -> Cable -> CRT)
+    pub vhs_enabled: bool,
+    pub cable_enabled: bool,
+    pub crt_enabled: bool,
+
+    // CRT effects
     pub scanlines: f32,     // 0-1 scanline intensity
-    pub curvature: f32,     // 0-0.5 barrel distortion
     pub bloom: f32,         // 0-1 phosphor bloom
     pub vignette: f32,      // 0-1 edge darkening
-    pub noise: f32,         // 0-0.5 signal noise
-    // VHS specific
+
+    // VHS effects
     pub tracking: f32,      // 0-1 tracking error amount
     pub chroma_shift: f32,  // 0-0.02 chroma/luma separation
     pub tape_wobble: f32,   // 0-1 horizontal instability
-    // Cable specific
+    pub vhs_noise: f32,     // 0-0.5 tape noise
+
+    // Cable effects
     pub bandwidth: f32,     // 0.5-1.0 bandwidth limiting
     pub ghosting: f32,      // 0-0.3 RF ghosting
+    pub cable_noise: f32,   // 0-0.2 signal noise
 }
 
 impl Default for OutputStage {
     fn default() -> Self {
         Self {
-            mode: OutputMode::CRT,
+            vhs_enabled: false,
+            cable_enabled: false,
+            crt_enabled: true,
             scanlines: 0.15,
-            curvature: 0.1,
             bloom: 0.2,
             vignette: 0.3,
-            noise: 0.02,
-            tracking: 0.0,
-            chroma_shift: 0.0,
-            tape_wobble: 0.0,
-            bandwidth: 1.0,
-            ghosting: 0.0,
+            tracking: 0.3,
+            chroma_shift: 0.005,
+            tape_wobble: 0.2,
+            vhs_noise: 0.05,
+            bandwidth: 0.9,
+            ghosting: 0.1,
+            cable_noise: 0.02,
         }
     }
 }
@@ -382,21 +377,26 @@ pub struct SynthUniforms {
     pub fb_saturation: f32,
 
     // Output stage (32 bytes)
-    pub out_mode: u32,
+    pub out_vhs_enabled: f32,
+    pub out_cable_enabled: f32,
+    pub out_crt_enabled: f32,
     pub out_scanlines: f32,
-    pub out_curvature: f32,
-    pub out_bloom: f32,
 
+    pub out_bloom: f32,
     pub out_vignette: f32,
-    pub out_noise: f32,
     pub out_tracking: f32,
     pub out_chroma_shift: f32,
 
-    // Output continued (16 bytes)
+    // Output continued (32 bytes)
     pub out_tape_wobble: f32,
+    pub out_vhs_noise: f32,
     pub out_bandwidth: f32,
     pub out_ghosting: f32,
-    pub _pad6: f32,
+
+    pub out_cable_noise: f32,
+    pub _pad6a: f32,
+    pub _pad6b: f32,
+    pub _pad6c: f32,
 
     // Timing (16 bytes)
     pub time: f32,
@@ -469,18 +469,22 @@ impl SynthUniforms {
             fb_saturation: state.feedback.saturation,
 
             // Output
-            out_mode: state.output.mode as u32,
+            out_vhs_enabled: if state.output.vhs_enabled { 1.0 } else { 0.0 },
+            out_cable_enabled: if state.output.cable_enabled { 1.0 } else { 0.0 },
+            out_crt_enabled: if state.output.crt_enabled { 1.0 } else { 0.0 },
             out_scanlines: state.output.scanlines,
-            out_curvature: state.output.curvature,
             out_bloom: state.output.bloom,
             out_vignette: state.output.vignette,
-            out_noise: state.output.noise,
             out_tracking: state.output.tracking,
             out_chroma_shift: state.output.chroma_shift,
             out_tape_wobble: state.output.tape_wobble,
+            out_vhs_noise: state.output.vhs_noise,
             out_bandwidth: state.output.bandwidth,
             out_ghosting: state.output.ghosting,
-            _pad6: 0.0,
+            out_cable_noise: state.output.cable_noise,
+            _pad6a: 0.0,
+            _pad6b: 0.0,
+            _pad6c: 0.0,
 
             // Timing
             time,

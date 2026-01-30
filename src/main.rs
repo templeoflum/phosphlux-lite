@@ -4,6 +4,7 @@
 //! Inspired by Paik/Abe, Sandin IP, Rutt/Etra, Jones Colorizer, and more.
 
 mod app;
+mod automation;
 mod presets;
 mod renderer;
 mod synth;
@@ -20,10 +21,21 @@ use winit::{
     window::{Window, WindowId},
 };
 
-const WINDOW_WIDTH: u32 = 1024;
-const WINDOW_HEIGHT: u32 = 768;
+const WINDOW_WIDTH: u32 = 1280;
+const WINDOW_HEIGHT: u32 = 800;
 const SYNTH_WIDTH: u32 = 640;
 const SYNTH_HEIGHT: u32 = 480;
+
+/// Load the bezel PNG and create an egui ColorImage
+fn load_bezel_image() -> egui::ColorImage {
+    let bezel_bytes = include_bytes!("../assets/cutout/Sony PVM-14_front_C_cutout_no logo.png");
+    let img = image::load_from_memory(bezel_bytes)
+        .expect("Failed to load bezel image")
+        .to_rgba8();
+    let size = [img.width() as usize, img.height() as usize];
+    let pixels = img.into_raw();
+    egui::ColorImage::from_rgba_unmultiplied(size, &pixels)
+}
 
 struct AppState {
     window: Arc<Window>,
@@ -37,6 +49,8 @@ struct AppState {
     app: App,
     last_frame_time: instant::Instant,
     egui_texture_id: egui::TextureId,
+    bezel_texture: egui::TextureHandle,  // Keep the handle alive
+    bezel_size: [usize; 2],
 }
 
 struct PhosphluxLite {
@@ -55,10 +69,11 @@ impl ApplicationHandler for PhosphluxLite {
             return;
         }
 
-        // Create window
+        // Create window (start maximized)
         let window_attrs = Window::default_attributes()
             .with_title("Phosphlux Lite")
-            .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
+            .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+            .with_maximized(true);
 
         let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
 
@@ -137,6 +152,15 @@ impl ApplicationHandler for PhosphluxLite {
             wgpu::FilterMode::Linear,
         );
 
+        // Load and register bezel texture
+        let bezel_image = load_bezel_image();
+        let bezel_size = bezel_image.size;
+        let bezel_texture = egui_state.egui_ctx().load_texture(
+            "bezel",
+            bezel_image,
+            egui::TextureOptions::LINEAR,
+        );
+
         self.state = Some(AppState {
             window,
             device,
@@ -149,6 +173,8 @@ impl ApplicationHandler for PhosphluxLite {
             app: App::new(),
             last_frame_time: instant::Instant::now(),
             egui_texture_id,
+            bezel_texture,
+            bezel_size,
         });
     }
 
@@ -227,25 +253,62 @@ impl ApplicationHandler for PhosphluxLite {
                     // Draw UI
                     ui::draw_ui(ctx, &mut state.app);
 
-                    // Draw video preview in center
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.centered_and_justified(|ui| {
+                    // Draw video preview with bezel overlay
+                    egui::CentralPanel::default()
+                        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(25, 25, 25)))
+                        .show(ctx, |ui| {
                             let available = ui.available_size();
-                            let aspect = SYNTH_WIDTH as f32 / SYNTH_HEIGHT as f32;
+                            let bezel_aspect = state.bezel_size[0] as f32 / state.bezel_size[1] as f32;
+                            let zoom = state.app.bezel.zoom;
 
-                            // Calculate size maintaining aspect ratio
-                            let (w, h) = if available.x / available.y > aspect {
-                                (available.y * aspect, available.y)
+                            // Calculate bezel size maintaining aspect ratio, with zoom applied
+                            let (base_w, base_h) = if available.x / available.y > bezel_aspect {
+                                (available.y * bezel_aspect, available.y)
                             } else {
-                                (available.x, available.x / aspect)
+                                (available.x, available.x / bezel_aspect)
                             };
+                            let bezel_w = base_w * zoom;
+                            let bezel_h = base_h * zoom;
 
-                            ui.image(egui::ImageSource::Texture(egui::load::SizedTexture::new(
+                            // Center the bezel in available space, with vertical offset
+                            let offset_x = (available.x - bezel_w) / 2.0;
+                            let offset_y = (available.y - bezel_h) / 2.0 + (state.app.bezel.offset_y * available.y);
+                            let bezel_rect = egui::Rect::from_min_size(
+                                ui.min_rect().min + egui::vec2(offset_x, offset_y),
+                                egui::vec2(bezel_w, bezel_h),
+                            );
+
+                            // Calculate screen region within bezel (using app settings)
+                            let screen_rect = egui::Rect::from_min_max(
+                                egui::pos2(
+                                    bezel_rect.min.x + bezel_w * state.app.bezel.left,
+                                    bezel_rect.min.y + bezel_h * state.app.bezel.top,
+                                ),
+                                egui::pos2(
+                                    bezel_rect.min.x + bezel_w * state.app.bezel.right,
+                                    bezel_rect.min.y + bezel_h * state.app.bezel.bottom,
+                                ),
+                            );
+
+                            // Draw synth output in screen region
+                            ui.painter().image(
                                 state.egui_texture_id,
-                                [w, h],
-                            )));
+                                screen_rect,
+                                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                egui::Color32::WHITE,
+                            );
+
+                            // Draw bezel overlay on top (if enabled)
+                            if state.app.bezel.enabled {
+                                ui.put(
+                                    bezel_rect,
+                                    egui::Image::from_texture(egui::load::SizedTexture::new(
+                                        state.bezel_texture.id(),
+                                        [bezel_w, bezel_h],
+                                    )),
+                                );
+                            }
                         });
-                    });
                 });
 
                 // Handle platform output

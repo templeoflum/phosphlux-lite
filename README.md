@@ -11,6 +11,7 @@ A simple, unified video synthesizer with a fixed 7-stage signal chain. Captures 
 - **LZX Cadet** - Modular signal flow concepts
 - **Beck Direct Video Synthesizer** - Oscillator-based pattern generation
 - **VHS/CRT aesthetics** - Tape degradation, scanlines, phosphor glow
+- **Sony PVM monitors** - Broadcast monitor aesthetic with bezel overlay
 
 ## Signal Chain
 
@@ -62,11 +63,28 @@ Temporal effects using previous frame:
 - **Offset**: X/Y drift
 
 ### Stage 7: Output
-Display emulation modes:
-- **Clean**: No processing
-- **CRT**: Scanlines, curvature, bloom, vignette
-- **VHS**: Tracking errors, tape wobble, chroma shift
-- **Cable**: Bandwidth limiting, RF ghosting
+Stackable display effects (applied in order: VHS → Cable → CRT):
+- **VHS**: Tracking errors, tape wobble, chroma shift, noise
+- **Cable**: Bandwidth limiting, RF ghosting, noise
+- **CRT**: Scanlines, bloom, vignette
+
+## Features
+
+### PVM Bezel Overlay
+Sony PVM-style monitor bezel frames the output for authentic broadcast monitor aesthetic. Configurable in Settings:
+- **Show/Hide**: Toggle bezel visibility
+- **Zoom**: Scale the display (default 1.8x)
+- **Position**: Vertical offset adjustment
+
+### LFO Automation
+Per-parameter LFO modulation with BPM sync:
+- Click the button next to any slider to cycle: Off → Slow → Medium → Fast → Off
+- Right-click to immediately disable
+- Expanded controls when active: range (lo/hi), phase offset, tempo subdivision
+- Global BPM control in header (60, 90, 120, 140 presets or custom)
+
+### Randomize
+One-click randomization of all synthesis parameters for instant inspiration.
 
 ## Built-in Presets
 
@@ -90,21 +108,23 @@ cargo run --release
 
 ## Controls
 
-- **Top Panel**: Preset selection, Randomize button
-- **Bottom Panel**: Stage tabs (INPUT, GEOM, AMP, COLOR, MIX, FEEDBACK, OUTPUT)
-- **Center**: Video preview (4:3 aspect ratio)
+- **Top Panel**: Preset selection, Randomize button, BPM controls, Settings (gear icon)
+- **Right Panel**: Stage tabs (INPUT, GEOM, AMP, COLOR, MIX, FB, OUT)
+- **Center**: Video preview with PVM bezel overlay
+- **Settings Window**: Bezel toggle, zoom, position, and alignment adjustments
 
-Click a stage tab to reveal its controls. All parameters update in real-time.
+Click a stage tab to reveal its controls. All parameters update in real-time. Click the LFO button (~/S/M/F) next to sliders to add automation.
 
 ## Technical Details
 
 - **Resolution**: 640x480 internal rendering
-- **Window**: 1024x768 default
+- **Window**: Launches maximized
 - **GPU**: wgpu (Vulkan/Metal/DX12)
 - **UI**: egui immediate-mode GUI
 - **Feedback**: Ping-pong texture buffers for temporal effects
+- **Bezel**: PNG overlay with configurable screen region
 
-## Future Plans (v1.1+)
+## Future Plans
 
 - External video input (webcam, capture card)
 - MIDI CC mapping for all parameters

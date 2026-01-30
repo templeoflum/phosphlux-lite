@@ -1,5 +1,48 @@
 # Phosphlux Lite Development Log
 
+## v0.2.0 - UI Overhaul & Automation (2026-01-30)
+
+### New Features
+
+**PVM Bezel Overlay**
+- Sony PVM-14 style monitor bezel frames the output
+- PNG overlay composited over synth output in egui
+- Configurable screen region alignment (left/top/right/bottom)
+- Zoom control (0.5x - 2.0x, default 1.8x)
+- Vertical position offset for centering
+- Toggle to show/hide bezel
+
+**LFO Automation System**
+- Per-parameter LFO modulation ported from main Phosphlux
+- Button next to each slider cycles: Off → Slow (0.1x) → Medium (0.25x) → Fast (0.5x) → Off
+- Right-click to immediately disable
+- Expanded controls when active: range (lo/hi), phase offset, tempo subdivision
+- Global BPM control with presets (60, 90, 120, 140) and custom input
+- BPM synced oscillation for all active LFOs
+
+**Output Stage Refactored**
+- Changed from mode-based (Clean/CRT/VHS/Cable) to stackable toggleable effects
+- Effects applied in fixed order: VHS → Cable → CRT
+- Each effect independently toggleable
+- VHS/Cable effects use feedback texture sampling when feedback is active, simple math when off
+
+**UI Restructured**
+- Controls moved from bottom panel to right side panel
+- Stage tabs in horizontal row at top of side panel
+- Single-column layout for better fit in narrow panel
+- Settings window (gear icon) for bezel configuration
+- Window launches maximized by default
+
+### Technical Changes
+
+- Added `automation.rs` with `LfoState` and `AutomationState`
+- Added `BezelSettings` struct with zoom, offset_y, enabled fields
+- Bezel PNG loaded via `include_bytes!` and stored as `TextureHandle`
+- VHS/cable shader functions now take `use_feedback` parameter
+- Feedback active check: `fb_enabled > 0.5 && mixer_feedback_mix > 0.01`
+
+---
+
 ## v0.1.0 - Initial Release (2026-01-30)
 
 ### Overview
@@ -36,42 +79,27 @@ First release of Phosphlux Lite - a simplified, fixed-pipeline video synthesizer
 - Transforms (zoom, rotation, offset) applied during sampling
 - Hue shift and decay for evolving colors
 
-**Output emulation modes:**
-- CRT: Scanlines, barrel distortion, vignette, phosphor bloom
-- VHS: Tracking errors (per-line horizontal jitter), tape wobble, chroma/luma separation
-- Cable: Bandwidth limiting (blur), RF ghosting (delayed echo)
-
 **Preset system:**
 - Presets stored as `SynthState` structs with all 7 stages
 - JSON serialization ready for save/load (not yet exposed in UI)
 - 6 built-in presets demonstrating different synthesis styles
 
-### Known Limitations
-
-**v0.1 scope (intentional):**
-- Internal generators only - no webcam/video input
-- Mouse/keyboard only - no MIDI
-- Visual synthesis only - no audio reactivity
-- No preset save/load UI (infrastructure exists)
-
-**Technical:**
-- Fixed 640x480 render resolution
-- No texture resize on window resize (planned)
-- Some dead code warnings (unused resize methods)
-
 ### File Structure
 
 ```
-apps/phosphlux-lite/
+phosphlux-lite/
 ├── Cargo.toml          # Package manifest
 ├── README.md           # User documentation
 ├── DEVLOG.md           # This file
+├── assets/
+│   └── cutout/         # PVM bezel images
 ├── src/
-│   ├── main.rs         # Entry point, window, event loop
-│   ├── app.rs          # Application state, presets, randomize
+│   ├── main.rs         # Entry point, window, event loop, bezel rendering
+│   ├── app.rs          # Application state, presets, randomize, bezel settings
+│   ├── automation.rs   # LFO automation system
 │   ├── synth.rs        # Stage parameter structs, GPU uniforms
 │   ├── renderer.rs     # wgpu renderer, feedback textures
-│   ├── ui.rs           # egui UI, stage panels
+│   ├── ui.rs           # egui UI, stage panels, settings window
 │   └── presets.rs      # Built-in presets, save/load
 └── shaders/
     └── lite.wgsl       # Fixed-pipeline synthesis shader
@@ -89,7 +117,7 @@ The `lite.wgsl` shader is organized by stage:
 6. **Stage 4 - Colorize**: `colorize_spectrum()`, `colorize_threshold()`, `stage_colorize()`
 7. **Stage 5 - Mixer**: Blend modes, luma key, `stage_mixer()`
 8. **Stage 6 - Feedback**: Transform sampling, `stage_feedback()`
-9. **Stage 7 - Output**: CRT/VHS/Cable emulation, `stage_output()`
+9. **Stage 7 - Output**: VHS/Cable/CRT effects with conditional feedback sampling
 10. **Fragment main**: Orchestrates all stages in order
 
 ### Performance
@@ -99,40 +127,25 @@ The `lite.wgsl` shader is organized by stage:
 - Feedback texture copy adds minimal overhead
 - No graph compilation or dynamic dispatch
 
-### Future Development
-
-**v0.1.1 (bug fixes):**
-- Window resize handling
-- Remove dead code warnings
-
-**v0.2 (UI polish):**
-- Preset save/load UI
-- Parameter tooltips
-- Keyboard shortcuts (randomize, preset switching)
-
-**v0.3 (external input):**
-- Webcam input as source option
-- Video file playback
-
-**v0.4 (control):**
-- MIDI learn for any parameter
-- OSC input support
-
-**v0.5 (audio):**
-- Audio input for reactivity
-- Envelope follower → parameter modulation
-- Beat detection
-
 ---
 
 ## Development History
 
-### 2026-01-30: Project Creation
+### 2026-01-30: v0.2.0 Release
 
-- Created `apps/phosphlux-lite/` directory structure
+- Added LFO automation system with BPM sync
+- Added PVM bezel overlay with zoom/position controls
+- Refactored output stage to stackable toggleable effects
+- Moved controls to right side panel
+- Added settings window for bezel configuration
+- Fixed VHS/cable effects feedback interaction (only when feedback active)
+- Window now launches maximized
+
+### 2026-01-30: v0.1.0 - Project Creation
+
+- Created `phosphlux-lite/` directory structure
 - Implemented all 7 stage parameter structs in `synth.rs`
-- Built fixed-pipeline shader `lite.wgsl` with ~600 lines
+- Built fixed-pipeline shader `lite.wgsl` with ~700 lines
 - Created egui UI with stage tabs and sliders
 - Added 6 built-in presets covering different synthesis styles
-- Integrated with workspace (shares dependencies with main app)
 - Both `phosphlux` and `phosphlux-lite` build and run successfully

@@ -79,21 +79,26 @@ struct Synth {
     fb_saturation: f32,
 
     // Output stage (32 bytes)
-    out_mode: u32,
+    out_vhs_enabled: f32,
+    out_cable_enabled: f32,
+    out_crt_enabled: f32,
     out_scanlines: f32,
-    out_curvature: f32,
-    out_bloom: f32,
 
+    out_bloom: f32,
     out_vignette: f32,
-    out_noise: f32,
     out_tracking: f32,
     out_chroma_shift: f32,
 
-    // Output continued (16 bytes)
+    // Output continued (32 bytes)
     out_tape_wobble: f32,
+    out_vhs_noise: f32,
     out_bandwidth: f32,
     out_ghosting: f32,
-    _pad6: f32,
+
+    out_cable_noise: f32,
+    _pad6a: f32,
+    _pad6b: f32,
+    _pad6c: f32,
 
     // Timing (16 bytes)
     time: f32,
@@ -534,21 +539,12 @@ fn stage_feedback(uv: vec2<f32>) -> vec3<f32> {
 // STAGE 7: OUTPUT (display emulation)
 // ============================================
 
-const OUT_CLEAN: u32 = 0u;
-const OUT_CRT: u32 = 1u;
-const OUT_VHS: u32 = 2u;
-const OUT_CABLE: u32 = 3u;
+// Effect enable thresholds
+const EFFECT_ON: f32 = 0.5;
 
 fn scanlines(uv: vec2<f32>, intensity: f32) -> f32 {
     let line = sin(uv.y * 480.0 * PI) * 0.5 + 0.5;
     return mix(1.0, line, intensity);
-}
-
-fn crt_curve(uv: vec2<f32>, amount: f32) -> vec2<f32> {
-    let centered = uv - 0.5;
-    let dist = dot(centered, centered);
-    let curved = centered * (1.0 + dist * amount);
-    return curved + 0.5;
 }
 
 fn vignette(uv: vec2<f32>, amount: f32) -> f32 {
@@ -591,53 +587,70 @@ fn vhs_wobble(uv: vec2<f32>, time: f32, amount: f32) -> vec2<f32> {
     return modified;
 }
 
-fn vhs_chroma_shift(uv: vec2<f32>, color: vec3<f32>, amount: f32) -> vec3<f32> {
-    // Sample chroma from offset positions
-    let offset = amount;
-    let r = textureSample(feedback_texture, feedback_sampler, uv + vec2<f32>(offset, 0.0)).r;
-    let b = textureSample(feedback_texture, feedback_sampler, uv - vec2<f32>(offset, 0.0)).b;
-    return vec3<f32>(r, color.g, b);
-}
-
-fn cable_bandwidth_limit(uv: vec2<f32>, color: vec3<f32>, bandwidth: f32) -> vec3<f32> {
-    // Simple blur to simulate bandwidth limiting
-    let blur_amount = (1.0 - bandwidth) * 0.01;
-    var blurred = color;
-
-    if blur_amount > 0.001 {
-        blurred += textureSample(feedback_texture, feedback_sampler, uv + vec2<f32>(blur_amount, 0.0)).rgb;
-        blurred += textureSample(feedback_texture, feedback_sampler, uv - vec2<f32>(blur_amount, 0.0)).rgb;
-        blurred /= 3.0;
+fn vhs_chroma_shift(uv: vec2<f32>, color: vec3<f32>, amount: f32, use_feedback: bool) -> vec3<f32> {
+    if use_feedback {
+        // Sample chroma from offset positions in feedback
+        let offset = amount;
+        let r = textureSample(feedback_texture, feedback_sampler, uv + vec2<f32>(offset, 0.0)).r;
+        let b = textureSample(feedback_texture, feedback_sampler, uv - vec2<f32>(offset, 0.0)).b;
+        return vec3<f32>(r, color.g, b);
+    } else {
+        // Simple color-based shift when no feedback
+        let shift = amount * 50.0;
+        let r_offset = sin(uv.x * shift) * 0.1;
+        let b_offset = sin(uv.x * shift + 2.0) * 0.1;
+        return vec3<f32>(
+            color.r + r_offset * amount,
+            color.g,
+            color.b + b_offset * amount
+        );
     }
-
-    return blurred;
 }
 
-fn cable_ghosting(uv: vec2<f32>, color: vec3<f32>, amount: f32) -> vec3<f32> {
-    // RF ghosting - faint delayed echo
-    let ghost_uv = uv + vec2<f32>(amount * 0.1, 0.0);
-    let ghost = textureSample(feedback_texture, feedback_sampler, ghost_uv).rgb;
-    return mix(color, color + ghost * 0.3, amount);
+fn cable_bandwidth_limit(uv: vec2<f32>, color: vec3<f32>, bandwidth: f32, use_feedback: bool) -> vec3<f32> {
+    if use_feedback {
+        // Blur using feedback texture
+        let blur_amount = (1.0 - bandwidth) * 0.01;
+        var blurred = color;
+        if blur_amount > 0.001 {
+            blurred += textureSample(feedback_texture, feedback_sampler, uv + vec2<f32>(blur_amount, 0.0)).rgb;
+            blurred += textureSample(feedback_texture, feedback_sampler, uv - vec2<f32>(blur_amount, 0.0)).rgb;
+            blurred /= 3.0;
+        }
+        return blurred;
+    } else {
+        // Simple desaturation when no feedback
+        let limit = 1.0 - bandwidth;
+        let luminance = dot(color, vec3<f32>(0.299, 0.587, 0.114));
+        let desaturated = mix(color, vec3<f32>(luminance), limit * 0.5);
+        return mix(desaturated, vec3<f32>(0.5), limit * 0.1);
+    }
+}
+
+fn cable_ghosting(uv: vec2<f32>, color: vec3<f32>, amount: f32, use_feedback: bool) -> vec3<f32> {
+    if use_feedback {
+        // RF ghosting using feedback texture
+        let ghost_uv = uv + vec2<f32>(amount * 0.1, 0.0);
+        let ghost = textureSample(feedback_texture, feedback_sampler, ghost_uv).rgb;
+        return mix(color, color + ghost * 0.3, amount);
+    } else {
+        // Simple tint when no feedback
+        let ghost_tint = color * vec3<f32>(0.8, 0.9, 1.0) * 0.3;
+        return color + ghost_tint * amount;
+    }
 }
 
 fn stage_output(uv: vec2<f32>, color: vec3<f32>, time: f32) -> vec3<f32> {
     var modified_uv = uv;
     var output_color = color;
 
-    let mode = synth.out_mode;
+    // Check if feedback is actually active (enabled AND mix > 0)
+    let feedback_active = synth.fb_enabled > EFFECT_ON && synth.mixer_feedback_mix > 0.01;
 
-    // Apply curvature (CRT and VHS)
-    if synth.out_curvature > 0.001 && mode != OUT_CLEAN {
-        modified_uv = crt_curve(modified_uv, synth.out_curvature);
+    // Effects applied in order: VHS -> Cable -> CRT
 
-        // Black outside curved area
-        if modified_uv.x < 0.0 || modified_uv.x > 1.0 || modified_uv.y < 0.0 || modified_uv.y > 1.0 {
-            return vec3<f32>(0.0);
-        }
-    }
-
-    // Mode-specific processing
-    if mode == OUT_VHS {
+    // === VHS EFFECTS ===
+    if synth.out_vhs_enabled > EFFECT_ON {
         // VHS tracking errors
         if synth.out_tracking > 0.001 {
             modified_uv = vhs_tracking(modified_uv, time, synth.out_tracking);
@@ -650,22 +663,37 @@ fn stage_output(uv: vec2<f32>, color: vec3<f32>, time: f32) -> vec3<f32> {
 
         // VHS chroma/luma separation
         if synth.out_chroma_shift > 0.0001 {
-            output_color = vhs_chroma_shift(modified_uv, output_color, synth.out_chroma_shift);
+            output_color = vhs_chroma_shift(modified_uv, output_color, synth.out_chroma_shift, feedback_active);
         }
-    } else if mode == OUT_CABLE {
+
+        // VHS noise
+        if synth.out_vhs_noise > 0.001 {
+            let noise = hash(modified_uv * 300.0 + time * 50.0) * 2.0 - 1.0;
+            output_color = output_color + vec3<f32>(noise * synth.out_vhs_noise);
+        }
+    }
+
+    // === CABLE EFFECTS ===
+    if synth.out_cable_enabled > EFFECT_ON {
         // Bandwidth limiting
         if synth.out_bandwidth < 0.999 {
-            output_color = cable_bandwidth_limit(modified_uv, output_color, synth.out_bandwidth);
+            output_color = cable_bandwidth_limit(modified_uv, output_color, synth.out_bandwidth, feedback_active);
         }
 
         // RF ghosting
         if synth.out_ghosting > 0.001 {
-            output_color = cable_ghosting(modified_uv, output_color, synth.out_ghosting);
+            output_color = cable_ghosting(modified_uv, output_color, synth.out_ghosting, feedback_active);
+        }
+
+        // Cable noise
+        if synth.out_cable_noise > 0.001 {
+            let noise = hash(modified_uv * 400.0 + time * 80.0) * 2.0 - 1.0;
+            output_color = output_color + vec3<f32>(noise * synth.out_cable_noise);
         }
     }
 
-    // Common effects for CRT/VHS/Cable
-    if mode != OUT_CLEAN {
+    // === CRT EFFECTS ===
+    if synth.out_crt_enabled > EFFECT_ON {
         // Scanlines
         if synth.out_scanlines > 0.001 {
             output_color = output_color * scanlines(modified_uv, synth.out_scanlines);
@@ -680,12 +708,6 @@ fn stage_output(uv: vec2<f32>, color: vec3<f32>, time: f32) -> vec3<f32> {
         if synth.out_bloom > 0.001 {
             output_color = phosphor_bloom(output_color, synth.out_bloom);
         }
-    }
-
-    // Noise (all modes)
-    if synth.out_noise > 0.001 {
-        let noise = hash(modified_uv * 500.0 + time * 100.0) * 2.0 - 1.0;
-        output_color = output_color + vec3<f32>(noise * synth.out_noise);
     }
 
     return clamp(output_color, vec3<f32>(0.0), vec3<f32>(1.0));

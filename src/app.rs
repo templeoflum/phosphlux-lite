@@ -1,5 +1,6 @@
 //! Application state management
 
+use crate::automation::AutomationState;
 use crate::presets::{builtin_presets, Preset};
 use crate::synth::SynthState;
 
@@ -18,6 +19,32 @@ pub enum SelectedStage {
 impl Default for SelectedStage {
     fn default() -> Self {
         Self::Input
+    }
+}
+
+/// Bezel position settings
+#[derive(Clone)]
+pub struct BezelSettings {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub zoom: f32,
+    pub offset_y: f32,
+    pub enabled: bool,
+}
+
+impl Default for BezelSettings {
+    fn default() -> Self {
+        Self {
+            left: 0.147,
+            top: 0.235,
+            right: 0.855,
+            bottom: 0.733,
+            zoom: 1.8,
+            offset_y: 0.02,
+            enabled: true,
+        }
     }
 }
 
@@ -43,6 +70,15 @@ pub struct App {
 
     /// Show preset browser
     pub show_preset_browser: bool,
+
+    /// Automation state (LFOs)
+    pub automation: AutomationState,
+
+    /// Show settings menu
+    pub show_settings: bool,
+
+    /// Bezel position settings
+    pub bezel: BezelSettings,
 }
 
 impl Default for App {
@@ -61,13 +97,19 @@ impl App {
             frame: 0,
             time: 0.0,
             show_preset_browser: false,
+            automation: AutomationState::new(),
+            show_settings: false,
+            bezel: BezelSettings::default(),
         }
     }
 
-    /// Update timing
+    /// Update timing and apply automation
     pub fn update(&mut self, dt: f32) {
         self.time += dt;
         self.frame = self.frame.wrapping_add(1);
+
+        // Apply LFO automation
+        self.automation.apply(&mut self.synth);
     }
 
     /// Load a preset by index
@@ -191,23 +233,20 @@ impl App {
         self.synth.feedback.offset_y = rand_range(-0.02, 0.02);
         self.synth.feedback.saturation = rand_range(0.8, 1.2);
 
-        // Output - pick a mode
-        self.synth.output.mode = match rand_int(4) {
-            0 => OutputMode::Clean,
-            1 => OutputMode::CRT,
-            2 => OutputMode::VHS,
-            _ => OutputMode::Cable,
-        };
+        // Output - randomly enable effects
+        self.synth.output.vhs_enabled = rand_range(0.0, 1.0) > 0.5;
+        self.synth.output.cable_enabled = rand_range(0.0, 1.0) > 0.6;
+        self.synth.output.crt_enabled = rand_range(0.0, 1.0) > 0.3;
         self.synth.output.scanlines = rand_range(0.0, 0.25);
-        self.synth.output.curvature = rand_range(0.0, 0.2);
         self.synth.output.bloom = rand_range(0.1, 0.4);
         self.synth.output.vignette = rand_range(0.1, 0.4);
-        self.synth.output.noise = rand_range(0.0, 0.1);
         self.synth.output.tracking = rand_range(0.0, 0.3);
         self.synth.output.chroma_shift = rand_range(0.0, 0.01);
         self.synth.output.tape_wobble = rand_range(0.0, 0.3);
+        self.synth.output.vhs_noise = rand_range(0.0, 0.1);
         self.synth.output.bandwidth = rand_range(0.7, 1.0);
         self.synth.output.ghosting = rand_range(0.0, 0.15);
+        self.synth.output.cable_noise = rand_range(0.0, 0.05);
 
         self.mark_modified();
     }
